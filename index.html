@@ -149,7 +149,7 @@
   footer{margin-top:48px;text-align:center;font-size:12px;color:var(--ink-soft)}
   footer button{background:none;border:none;color:var(--ink-soft);font-size:12px;cursor:pointer;text-decoration:underline;font-family:'Inter',sans-serif}
   footer button:hover{color:var(--accent)}
-  @media(max-width:760px){body{padding:20px 12px 60px}.table-scroll{overflow-x:auto}table{min-width:980px}}
+  @media(max-width:760px){body{padding:20px 12px 60px}.table-scroll{overflow-x:auto}table{min-width:1180px}}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -501,15 +501,25 @@
 
   /* ================= XML ================= */
   function extrairCST(det){
+    // apenas o CST do ICMS — se o fornecedor for Simples (CSOSN), fica vazio
     const imposto=tag(det,'imposto');
     if(!imposto)return'';
     const icms=tag(imposto,'ICMS');
     if(!icms)return'';
-    const cst=txt(icms,'CST');
-    if(cst)return cst;
-    const csosn=txt(icms,'CSOSN');
-    if(csosn)return csosn+' (CSOSN)';
-    return'';
+    return txt(icms,'CST');
+  }
+  function extrairCSTTrib(det,nomeTrib){
+    // CST próprio do PIS ou do COFINS
+    const imposto=tag(det,'imposto');
+    if(!imposto)return'';
+    const t=tag(imposto,nomeTrib);
+    if(!t)return'';
+    return txt(t,'CST');
+  }
+  function brl(v){
+    const n=parseFloat(v);
+    if(isNaN(n))return'';
+    return'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4});
   }
   function parseNFe(xmlStr,fileName){
     const doc=new DOMParser().parseFromString(xmlStr,'text/xml');
@@ -539,7 +549,9 @@
       nota.itens.push({
         nItem:det.getAttribute('nItem')||String(i+1),
         cProd:txt(prod,'cProd'),xProd:txt(prod,'xProd'),
-        ncm:txt(prod,'NCM'),cfop:txt(prod,'CFOP'),cst:extrairCST(det),uCom:txt(prod,'uCom'),
+        ncm:txt(prod,'NCM'),cfop:txt(prod,'CFOP'),cst:extrairCST(det),
+        pis:extrairCSTTrib(det,'PIS'),cofins:extrairCSTTrib(det,'COFINS'),
+        custo:txt(prod,'vUnCom'),uCom:txt(prod,'uCom'),
         cEAN:txt(prod,'cEAN'),
         res:null,
         decisao:null,        // para prováveis: 'mesmo' | 'diferente' | null
@@ -738,6 +750,9 @@
         <td>${esc(it.xProd)}${det}</td>
         <td class="mono">${esc(it.ncm)}</td>
         <td class="mono">${esc(it.cst)||'—'}</td>
+        <td class="mono">${esc(it.pis)||'—'}</td>
+        <td class="mono">${esc(it.cofins)||'—'}</td>
+        <td class="mono">${esc(brl(it.custo))||'—'}</td>
         <td>${PILL[s]}</td>
         <td>${acao}</td>
       </tr>`;
@@ -754,8 +769,8 @@
     card.innerHTML=head+fornForm+`
       <div class="section-label">Itens da nota</div>
       <div class="table-scroll"><table>
-        <thead><tr><th>#</th><th>EAN na nota</th><th>Produto na nota</th><th>NCM</th><th>CST</th><th>Situação</th><th>Ação</th></tr></thead>
-        <tbody>${linhas||'<tr><td colspan="7" style="color:var(--ink-soft)">Nenhum item neste filtro.</td></tr>'}</tbody>
+        <thead><tr><th>#</th><th>EAN na nota</th><th>Produto na nota</th><th>NCM</th><th>CST</th><th>PIS</th><th>COFINS</th><th>Custo un.</th><th>Situação</th><th>Ação</th></tr></thead>
+        <tbody>${linhas||'<tr><td colspan="10" style="color:var(--ink-soft)">Nenhum item neste filtro.</td></tr>'}</tbody>
       </table></div>`+foot;
 
     /* listeners */
@@ -846,6 +861,7 @@
     return itensCadastro(n).map(it=>({
       codigoBarras:gtinFinal(it)||'NÃO INFORMADO',
       nome:it.xProd,cfop:it.cfop,ncm:it.ncm,cst:it.cst||'—',
+      pis:it.pis||'—',cofins:it.cofins||'—',custo:brl(it.custo)||'—',
       codForn:it.cProd,nItem:it.nItem,uCom:it.uCom
     }));
   }
@@ -922,12 +938,12 @@
     doc.autoTable({
       startY:y,
       margin:{left:M,right:M},
-      head:[['#','Código de barras','Nome do produto','CFOP','NCM','CST','Un.']],
-      body:prods.map((p,k)=>[k+1,p.codigoBarras,p.nome,p.cfop,p.ncm,p.cst,p.uCom]),
-      styles:{font:'helvetica',fontSize:8.5,textColor:[22,35,59],cellPadding:2.2,lineColor:[226,231,239],lineWidth:.2},
-      headStyles:{fillColor:[36,86,201],textColor:[255,255,255],fontStyle:'bold',fontSize:8.5},
+      head:[['#','Código de barras','Nome do produto','CFOP','NCM','CST','PIS','COFINS','Custo un.']],
+      body:prods.map((p,k)=>[k+1,p.codigoBarras,p.nome,p.cfop,p.ncm,p.cst,p.pis,p.cofins,p.custo]),
+      styles:{font:'helvetica',fontSize:8,textColor:[22,35,59],cellPadding:2,lineColor:[226,231,239],lineWidth:.2},
+      headStyles:{fillColor:[36,86,201],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
       alternateRowStyles:{fillColor:[244,246,249]},
-      columnStyles:{0:{cellWidth:8},1:{cellWidth:32,font:'courier'},3:{cellWidth:14},4:{cellWidth:20},5:{cellWidth:20},6:{cellWidth:11}},
+      columnStyles:{0:{cellWidth:7},1:{cellWidth:29,font:'courier'},3:{cellWidth:12},4:{cellWidth:17},5:{cellWidth:10},6:{cellWidth:10},7:{cellWidth:16},8:{cellWidth:19}},
       didParseCell:d=>{
         if(d.section==='body'&&d.column.index===1&&d.cell.raw==='NÃO INFORMADO'){
           d.cell.styles.textColor=[214,69,69];d.cell.styles.fontStyle='bold';d.cell.styles.font='helvetica';
@@ -975,10 +991,10 @@
     XLSX.utils.book_append_sheet(wb,ws1,'Fornecedor');
     const prods=dadosProdutos(n);
     const ws2=XLSX.utils.aoa_to_sheet([
-      ['#','Código de barras','Nome do produto','CFOP','NCM','CST','Un.','Cód. no fornecedor','Item na NF'],
-      ...prods.map((p,k)=>[k+1,p.codigoBarras,p.nome,p.cfop,p.ncm,p.cst,p.uCom,p.codForn,p.nItem])
+      ['#','Código de barras','Nome do produto','CFOP','NCM','CST','PIS','COFINS','Custo un.','Un.','Cód. no fornecedor','Item na NF'],
+      ...prods.map((p,k)=>[k+1,p.codigoBarras,p.nome,p.cfop,p.ncm,p.cst,p.pis,p.cofins,p.custo,p.uCom,p.codForn,p.nItem])
     ]);
-    ws2['!cols']=[{wch:4},{wch:18},{wch:55},{wch:8},{wch:12},{wch:12},{wch:6},{wch:18},{wch:10}];
+    ws2['!cols']=[{wch:4},{wch:18},{wch:55},{wch:8},{wch:12},{wch:10},{wch:8},{wch:10},{wch:14},{wch:6},{wch:18},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws2,'Produtos');
     XLSX.writeFile(wb,`cadastro_produtos_NF${n.nNF||'s-n'}_${sanitizeFile(f.fantasia||f.razao)}.xlsx`);
   }
@@ -986,16 +1002,16 @@
   const LBL={cadastrado:'Já cadastrado',confirmado:'Confirmado como o mesmo',decidir:'Aguardando confirmação',cadastro:'Para cadastro'};
   function gerarXLSXGeral(){
     const wb=XLSX.utils.book_new();
-    const rows=[['NF','Fornecedor','Item','EAN na nota','GTIN informado','Produto na nota','NCM','CFOP','CST','Situação','Similaridade','Produto na base','EAN na base','Cód. interno na base']];
+    const rows=[['NF','Fornecedor','Item','EAN na nota','GTIN informado','Produto na nota','NCM','CFOP','CST','PIS','COFINS','Custo un.','Situação','Similaridade','Produto na base','EAN na base','Cód. interno na base']];
     notas.forEach(n=>n.itens.forEach(it=>{
       const b=baseInfo(it.res.idx);
       const s=statusEfetivo(it);
       const mostraBase=s!=='cadastro'||it.res.tipo==='provavel'||it.res.pct>=60;
-      rows.push([n.nNF,n.forn.razao,it.nItem,it.cEAN,it.gtinInformado||'',it.xProd,it.ncm,it.cfop,it.cst,LBL[s],
+      rows.push([n.nNF,n.forn.razao,it.nItem,it.cEAN,it.gtinInformado||'',it.xProd,it.ncm,it.cfop,it.cst||'',it.pis||'',it.cofins||'',brl(it.custo)||'',LBL[s],
         it.res.pct?it.res.pct+'%':'',mostraBase?b.nome:'',mostraBase?b.bc:'',mostraBase?b.cod:'']);
     }));
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:8},{wch:30},{wch:6},{wch:16},{wch:16},{wch:50},{wch:11},{wch:7},{wch:12},{wch:22},{wch:12},{wch:50},{wch:16},{wch:14}];
+    ws['!cols']=[{wch:8},{wch:30},{wch:6},{wch:16},{wch:16},{wch:50},{wch:11},{wch:7},{wch:8},{wch:8},{wch:10},{wch:14},{wch:22},{wch:12},{wch:50},{wch:16},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,'Conferência');
     XLSX.writeFile(wb,'conferencia_cadastro_produtos.xlsx');
   }
@@ -1006,7 +1022,7 @@
       if(!novos.length)return;
       s+=`PRODUTOS PARA CADASTRO — NF ${n.nNF} (${n.forn.razao})\n`;
       novos.forEach(it=>{
-        s+=`- Item ${it.nItem} | Cód. barras: ${gtinFinal(it)||'NÃO INFORMADO'} | ${it.xProd} | NCM ${it.ncm} | CFOP ${it.cfop} | CST ${it.cst||'—'}\n`;
+        s+=`- Item ${it.nItem} | Cód. barras: ${gtinFinal(it)||'NÃO INFORMADO'} | ${it.xProd} | NCM ${it.ncm} | CFOP ${it.cfop} | CST ${it.cst||'—'} | PIS ${it.pis||'—'} | COFINS ${it.cofins||'—'} | Custo ${brl(it.custo)||'—'}\n`;
       });
       s+='\n';
     });
