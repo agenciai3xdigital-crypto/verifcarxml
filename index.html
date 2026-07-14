@@ -8,8 +8,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --ink:#16233B;--ink-soft:#4A5568;--bg:#F4F6F9;--card:#FFFFFF;--line:#E2E7EF;
@@ -158,7 +156,7 @@
   <header>
     <div class="eyebrow">Suporte à Rede &middot; Conferência e Cadastro de Produtos</div>
     <h1>Conferir a nota e solicitar cadastro</h1>
-    <p class="sub">Envie o XML da NF-e: a ferramenta compara com a <strong>base da rede</strong>, você confirma os casos parecidos, bipa o código de barras dos produtos novos e baixa o <strong>PDF completo para o chamado de cadastro</strong>.</p>
+    <p class="sub">Envie o XML da NF-e: a ferramenta compara com a <strong>base da rede</strong>, você confirma os casos parecidos, bipa o código de barras dos produtos novos e baixa o <strong>Excel completo para o chamado de cadastro</strong>.</p>
     <div>
       <span class="base-status st-load" id="baseStatus">&#8987; Carregando a base de produtos da rede…</span>
       <span class="privacy">&#128274; O XML é lido só no seu navegador</span>
@@ -238,7 +236,7 @@
   </div>
 
   <footer>
-    Ferramenta interna da franqueadora &middot; anexe o PDF gerado ao chamado de <strong>cadastro de produtos</strong>.
+    Ferramenta interna da franqueadora &middot; anexe o Excel gerado ao chamado de <strong>cadastro de produtos</strong>.
     <br><button id="toggleAdmin">Atualizar base de produtos (suporte)</button>
   </footer>
 </div>
@@ -689,7 +687,7 @@
     if(nCad||nDec){
       const f=n.forn;
       fornForm=`
-        <div class="section-label">Dados do fornecedor <small>(pré-preenchidos pelo XML — vão no PDF do chamado; complete o que faltar)</small></div>
+        <div class="section-label">Dados do fornecedor <small>(pré-preenchidos pelo XML — vão no Excel do chamado; complete o que faltar)</small></div>
         <div class="forn-grid">
           ${fieldHTML(ni,'fantasia','Nome do fornecedor (fantasia)',f.fantasia,{ph:'Nome fantasia'})}
           ${fieldHTML(ni,'razao','Razão social',f.razao)}
@@ -749,7 +747,7 @@
         <td class="mono">${esc(it.cEAN&&it.cEAN.toUpperCase()!=='SEM GTIN'?it.cEAN:'—')}</td>
         <td>${esc(it.xProd)}${det}</td>
         <td class="mono">${esc(it.ncm)}</td>
-        <td class="mono">${esc(it.cst)||'—'}</td>
+        <td class="mono">${esc(it.cfop)||'—'}</td>
         <td class="mono">${esc(it.pis)||'—'}</td>
         <td class="mono">${esc(it.cofins)||'—'}</td>
         <td class="mono">${esc(brl(it.custo))||'—'}</td>
@@ -761,15 +759,14 @@
     const foot=(nCad||nDec)?`
       <div class="nota-foot">
         <span class="progress-txt" id="prog-${ni}"></span>
-        <button class="btn primary btn-pdf" data-nota="${ni}">&#128196; Gerar PDF para o chamado</button>
-        <button class="btn btn-xlsx" data-nota="${ni}">&#8681; Excel do cadastro</button>
+        <button class="btn primary btn-xlsx" data-nota="${ni}">&#8681; Gerar Excel para o chamado</button>
       </div>`
       :`<div class="all-ok">&#10003;&nbsp; Nenhum produto novo nesta nota — não é necessário abrir chamado de cadastro.</div>`;
 
     card.innerHTML=head+fornForm+`
       <div class="section-label">Itens da nota</div>
       <div class="table-scroll"><table>
-        <thead><tr><th>#</th><th>EAN na nota</th><th>Produto na nota</th><th>NCM</th><th>CST</th><th>PIS</th><th>COFINS</th><th>Custo un.</th><th>Situação</th><th>Ação</th></tr></thead>
+        <thead><tr><th>#</th><th>EAN na nota</th><th>Produto na nota</th><th>NCM</th><th>CFOP</th><th>PIS</th><th>COFINS</th><th>Custo un.</th><th>Situação</th><th>Ação</th></tr></thead>
         <tbody>${linhas||'<tr><td colspan="10" style="color:var(--ink-soft)">Nenhum item neste filtro.</td></tr>'}</tbody>
       </table></div>`+foot;
 
@@ -797,8 +794,6 @@
       const h=()=>{notas[+el.dataset.nota].forn[el.dataset.forn]=el.value;};
       el.addEventListener('input',h);el.addEventListener('change',h);
     });
-    const bp=card.querySelector('.btn-pdf');
-    if(bp)bp.addEventListener('click',e=>gerarPDF(+e.currentTarget.dataset.nota));
     const bx=card.querySelector('.btn-xlsx');
     if(bx)bx.addEventListener('click',e=>gerarXLSXNota(+e.currentTarget.dataset.nota));
     setTimeout(()=>atualizarProgresso(ni),0);
@@ -839,7 +834,7 @@
     if(dec)partes.push(dec+' item(ns) aguardando "é o mesmo?"');
     if(semG)partes.push(semG+' código(s) de barras a preencher');
     if(!partes.length&&cad){
-      prog.textContent=`✓ ${cad} produto(s) prontos — pode gerar o PDF`;
+      prog.textContent=`✓ ${cad} produto(s) prontos — pode gerar o Excel`;
       prog.classList.add('done');
     }else{
       prog.textContent=partes.join(' · ')||'';
@@ -864,99 +859,6 @@
       pis:it.pis||'—',cofins:it.cofins||'—',custo:brl(it.custo)||'—',
       codForn:it.cProd,nItem:it.nItem,uCom:it.uCom
     }));
-  }
-
-  function gerarPDF(ni){
-    const n=notas[ni];
-    if(!itensCadastro(n).length){alert('Não há produtos para cadastro nesta nota.');return;}
-    if(!checarPendencias(n))return;
-    const f=n.forn;
-    const {jsPDF}=window.jspdf;
-    const doc=new jsPDF({unit:'mm',format:'a4'});
-    const W=doc.internal.pageSize.getWidth();
-    const M=14;
-    let y=16;
-
-    doc.setFillColor(22,35,59);
-    doc.rect(0,0,W,26,'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold');doc.setFontSize(14);
-    doc.text('SOLICITAÇÃO DE CADASTRO DE PRODUTOS',M,11);
-    doc.setFont('helvetica','normal');doc.setFontSize(9);
-    doc.text('Produtos conferidos contra a base da rede — anexar ao chamado de cadastro',M,17);
-    doc.text('Gerado em '+hoje(),M,22.5);
-    y=34;
-
-    doc.setTextColor(22,35,59);
-    doc.setFont('helvetica','bold');doc.setFontSize(11);
-    doc.text('DADOS DO FORNECEDOR',M,y);y+=2;
-    doc.setDrawColor(226,231,239);doc.line(M,y,W-M,y);y+=6;
-    doc.setFontSize(9.5);
-    const linhaCampo=(label,valor,x,largura)=>{
-      doc.setFont('helvetica','bold');doc.setTextColor(74,85,104);
-      doc.text(label,x,y);
-      doc.setFont('helvetica','normal');doc.setTextColor(22,35,59);
-      const t=doc.splitTextToSize(valor||'—',largura);
-      doc.text(t,x,y+4.3);
-      return 4.3+t.length*4.2;
-    };
-    const col2=W/2+4,wCol=(W/2)-M-6;
-    let h1,h2;
-    h1=linhaCampo('Nome do fornecedor (fantasia)',f.fantasia,M,wCol);
-    h2=linhaCampo('Razão social',f.razao,col2,wCol);
-    y+=Math.max(h1,h2)+4;
-    h1=linhaCampo('CNPJ',f.cnpj,M,wCol);
-    h2=linhaCampo('Telefone',f.fone,col2,wCol);
-    y+=Math.max(h1,h2)+4;
-    h1=linhaCampo('E-mail',f.email,M,wCol);
-    h2=linhaCampo('CEP',f.cep,col2,wCol);
-    y+=Math.max(h1,h2)+4;
-    h1=linhaCampo('Endereço',f.endereco,M,W-2*M);
-    y+=h1+4;
-    h1=linhaCampo('Inscrição estadual',f.ie,M,wCol);
-    h2=linhaCampo('Inscrição municipal',f.im,col2,wCol);
-    y+=Math.max(h1,h2)+4;
-    h1=linhaCampo('Tipo de regime do fornecedor',REGIMES[f.crt]||f.crt||'—',M,W-2*M);
-    y+=h1+6;
-
-    doc.setFont('helvetica','bold');doc.setFontSize(11);
-    doc.text('NOTA FISCAL DE REFERÊNCIA',M,y);y+=2;
-    doc.line(M,y,W-M,y);y+=6;
-    doc.setFontSize(9.5);
-    h1=linhaCampo('Número / série',(n.nNF||'—')+(n.serie?' / '+n.serie:''),M,wCol);
-    h2=linhaCampo('Data de emissão',fmtData(n.dhEmi),col2,wCol);
-    y+=Math.max(h1,h2)+4;
-    h1=linhaCampo('Chave de acesso',n.chave,M,W-2*M);
-    y+=h1+6;
-
-    doc.setFont('helvetica','bold');doc.setFontSize(11);
-    doc.text('PRODUTOS PARA CADASTRO',M,y);y+=1.5;
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(74,85,104);
-    doc.text('Itens conferidos: não constam na base de produtos da rede.',M,y+3.5);y+=6;
-
-    const prods=dadosProdutos(n);
-    doc.autoTable({
-      startY:y,
-      margin:{left:M,right:M},
-      head:[['#','Código de barras','Nome do produto','CFOP','NCM','CST','PIS','COFINS','Custo un.']],
-      body:prods.map((p,k)=>[k+1,p.codigoBarras,p.nome,p.cfop,p.ncm,p.cst,p.pis,p.cofins,p.custo]),
-      styles:{font:'helvetica',fontSize:8,textColor:[22,35,59],cellPadding:2,lineColor:[226,231,239],lineWidth:.2},
-      headStyles:{fillColor:[36,86,201],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
-      alternateRowStyles:{fillColor:[244,246,249]},
-      columnStyles:{0:{cellWidth:7},1:{cellWidth:29,font:'courier'},3:{cellWidth:12},4:{cellWidth:17},5:{cellWidth:10},6:{cellWidth:10},7:{cellWidth:16},8:{cellWidth:19}},
-      didParseCell:d=>{
-        if(d.section==='body'&&d.column.index===1&&d.cell.raw==='NÃO INFORMADO'){
-          d.cell.styles.textColor=[214,69,69];d.cell.styles.fontStyle='bold';d.cell.styles.font='helvetica';
-        }
-      }
-    });
-
-    let fy=doc.lastAutoTable.finalY+8;
-    if(fy>270){doc.addPage();fy=20;}
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(120,128,140);
-    doc.text(`Total: ${prods.length} produto(s) para cadastro. Conferência feita contra a base da rede (${base.prods.length.toLocaleString('pt-BR')} produtos, atualizada em ${base.atualizado||'—'}). Arquivo de origem: ${n.arquivo}.`,M,fy,{maxWidth:W-2*M});
-
-    doc.save(`cadastro_produtos_NF${n.nNF||'s-n'}_${sanitizeFile(f.fantasia||f.razao)}.pdf`);
   }
 
   function gerarXLSXNota(ni){
